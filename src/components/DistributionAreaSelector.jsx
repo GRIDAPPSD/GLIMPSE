@@ -4,6 +4,7 @@ import { useGraph } from "../contexts/GraphContext";
 import graphHelper from "../graph-helper/GraphHelper";
 import useAreaHighlight from "../hooks/useAreaHighlight";
 import { FILL_ALPHA, BORDER_ALPHA } from "./graph/AreaHighlightLayers";
+import { surfaceFor } from "./agents/agent-palette";
 
 const buildTreeData = (areas) =>
     Object.entries(areas).map(([type, areaList]) => ({
@@ -14,17 +15,8 @@ const buildTreeData = (areas) =>
     }));
 
 const DistributionAreaSelector = () => {
-    // The tree can be resolved synchronously when the component mounts with a
-    // graph already loaded; graph load/clear events update it afterwards.
-    const [treeData, setTreeData] = useState(() => {
-        const current = graphHelper.distributionAreas;
-        return Object.keys(current).length > 0 ? buildTreeData(current) : [];
-    });
+    const [treeData, setTreeData] = useState(() => buildTreeData(graphHelper.distributionAreas));
     const { darkMode } = useGraph();
-
-    // The selection, its colors and the WebGL contour layers all live outside
-    // this component — the agent markers drive the same highlight, so there is
-    // one shared controller and AreaHighlightLayers does the drawing.
     const areaHighlight = useAreaHighlight();
     const { selection, colors } = areaHighlight;
 
@@ -42,8 +34,6 @@ const DistributionAreaSelector = () => {
     // Listen for graph load/clear events
     useEffect(() => {
         const handleGraphLoaded = () => {
-            // The selection outlives a remount, so a new model would otherwise
-            // inherit area ids belonging to the previous one.
             areaHighlight.clear();
             setTreeData(buildTreeData(graphHelper.distributionAreas));
         };
@@ -64,11 +54,7 @@ const DistributionAreaSelector = () => {
 
     if (treeData.length === 0) return null;
 
-    // Same palette the graph legend panels use, so both float over the canvas
-    // as the same kind of surface in either theme.
-    const c = darkMode
-        ? { bg: "rgba(31,31,31,0.92)", text: "#e0e0e0", border: "#3a3a3a" }
-        : { bg: "rgba(255,255,255,0.92)", text: "#1f1f1f", border: "#e0e0e0" };
+    const c = surfaceFor(darkMode);
 
     return (
         <>
@@ -92,7 +78,7 @@ const DistributionAreaSelector = () => {
                         marginTop: 8,
                         width: 240,
                         padding: "8px 10px",
-                        background: c.bg,
+                        background: c.panelBg,
                         color: c.text,
                         border: `1px solid ${c.border}`,
                         borderRadius: 6,

@@ -8,12 +8,12 @@ import GridAPPSDModelForm from "../forms/GridAPPSDModelForm";
 import graphHelper from "../../graph-helper/GraphHelper";
 import socketClientHelper from "../../socket-client-helper/SocketClientHelper";
 import { useGraph } from "../../contexts/GraphContext";
-import { API_BASE_URL, FEATURES, PARSE_TIMEOUT_MS } from "../../config";
+import { API_BASE_URL, PARSE_TIMEOUT_MS } from "../../config";
 import { confirmDiscardChanges, errorText } from "../../utils/notify";
 import { loadAgentRoster } from "../../utils/agent-api";
+import { replaceModel } from "./load-model";
 
-const LoadModelModal = ({ onMount }) => {
-    const [open, setOpen] = useState(true);
+const LoadModelModal = ({ open, close }) => {
     const [loading, setLoading] = useState(false);
     const [loadProgress, setLoadProgress] = useState(null);
     const [selectedGridappsdModels, setSelectedGridappsdModels] = useState(null);
@@ -29,10 +29,9 @@ const LoadModelModal = ({ onMount }) => {
 
     // Only offer the GridAPPS-D tab when the broker is actually reachable.
     // Re-checked every time the modal opens so a broker started after app
-    // launch is picked up. Skipped entirely in hosted mode, where the endpoint
-    // isn't registered and every probe would just 404.
+    // launch is picked up.
     useEffect(() => {
-        if (!open || !FEATURES.gridappsd) return;
+        if (!open) return;
         let cancelled = false;
 
         axios
@@ -51,39 +50,30 @@ const LoadModelModal = ({ onMount }) => {
 
     const handleModelSelect = (selectedModels) => {
         const models = selectedModels.map((m) => JSON.parse(m));
-        console.log(models);
         graphHelper.selectedGridappsdModels = models;
         setSelectedGridappsdModels(models);
     };
 
-    const ITEMS = [
+    const items = [
         {
             label: "File Upload",
             key: "file-upload",
-            children: <FileUpload closeModal={() => setOpen(false)} />,
+            children: <FileUpload closeModal={close} />,
         },
         {
             label: "Example Models",
             key: "example-models",
-            children: <ExampleModels closeModal={() => setOpen(false)} />,
+            children: <ExampleModels closeModal={close} />,
         },
     ];
 
     if (gridappsdAvailable) {
-        ITEMS.push({
+        items.push({
             label: "Load w/ GridAPPS-D",
             key: "load-gridappsd",
             children: <GridAPPSDModelForm initialConnected onModelSelect={handleModelSelect} />,
         });
     }
-
-    useEffect(() => {
-        if (onMount) {
-            onMount(setOpen);
-        }
-    }, [onMount]);
-
-    const close = () => setOpen(false);
 
     const handleLoad = async () => {
         setError(null);
@@ -94,7 +84,7 @@ const LoadModelModal = ({ onMount }) => {
         setLoading(true);
 
         try {
-            const resPromise = axios.post(
+            const { data: response } = await axios.post(
                 `${API_BASE_URL}/api/gridappsd/models`,
                 selectedGridappsdModels.map((m) => m.modelId),
                 {
@@ -102,26 +92,12 @@ const LoadModelModal = ({ onMount }) => {
                     timeout: PARSE_TIMEOUT_MS,
                 },
             );
-            const { data: response } = await resPromise;
 
-            if ("error" in response) throw new Error(response.error);
-
-            // Set graph data which triggers clear and render
-            if (graphHelper.graph.order > 0) {
-                graphHelper.clearGraphData();
-                window.dispatchEvent(new CustomEvent("graph-cleared"));
-            }
-
-            // Close modal after data is set
-            console.log(response);
-            graphHelper.setIsCIM(true);
+            replaceModel(response, true);
             // Fallback feeder for objects that carry no feeder_id of their own.
             // With several feeders selected the first one wins; per-object
             // feeder_id still takes precedence (see resolveFeederIdFromGraph).
             graphHelper.currentFeederID = selectedGridappsdModels[0]?.modelId ?? null;
-            graphHelper.setThemeObject(response.themeData ?? null);
-            graphHelper.setObjectDetails(response.objectDetails);
-            graphHelper.setGraphData(response.data ?? response);
             // Before graph-loaded, so the agent panel and views are populated by
             // the time they resync on that event.
             await loadAgentRoster(graphHelper.currentFeederID);
@@ -133,7 +109,7 @@ const LoadModelModal = ({ onMount }) => {
             // state (VisToolbar / GraphLayout).
             socketClientHelper.detachSimulation();
             socketClientHelper.setSimulationState("idle");
-            setOpen(false);
+            close();
         } catch (e) {
             // Inline (not a toast): a CIM pull can take minutes, and the user is
             // still looking at this modal when it fails.
@@ -175,7 +151,7 @@ const LoadModelModal = ({ onMount }) => {
                     style={{ marginBottom: "1rem" }}
                 />
             )}
-            <Tabs type="card" items={ITEMS} />
+            <Tabs type="card" items={items} />
         </Modal>,
         document.getElementById("portal"),
     );

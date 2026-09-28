@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import { useMemo, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { Modal, Form, Select, Input, Radio, Button, Divider, Empty, Spin, theme } from "antd";
 import { v4 as uuidv4 } from "uuid";
@@ -135,7 +135,6 @@ const PlotCreatorModal = ({ open, close, catalog, loading = false, onCreate }) =
                             <Select
                                 placeholder="Select type"
                                 options={TYPE_OPTIONS}
-                                // Reset the dependent fields when the type changes.
                                 onChange={() =>
                                     form.setFieldsValue({ component: undefined, phases: [] })
                                 }

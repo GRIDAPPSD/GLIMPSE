@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import "../styles/VisToolbar.css";
 import { Button, Divider, Space, Tooltip } from "antd";
 import graphHelper from "../graph-helper/GraphHelper";
@@ -22,29 +22,14 @@ const VisToolbar = ({ onToggleCharts, activePanel }) => {
     // Condition coloring only says anything once measurements are flowing.
     const canShowViolations = simulationState === "running" || simulationState === "paused";
 
-    // graphHelper owns the flag (the reducers read it directly); mirror it here
-    // so the button reflects changes made via the shortcut too.
     useEffect(() => {
         const handler = (e) => setViolationMode(Boolean(e?.detail?.enabled));
         window.addEventListener("graph-violation-mode-change", handler);
         return () => window.removeEventListener("graph-violation-mode-change", handler);
     }, []);
 
-    // Empty deps: the subscription is stable for the lifetime of the component.
-    // Without them this tore down and re-registered the listener on every
-    // render — i.e. on every simulation frame.
-    useEffect(() => {
-        const unsubSimState = socketClientHelper.on("sim-state-change", (simState) => {
-            setSimulationState(simState);
-        });
+    useEffect(() => socketClientHelper.on("sim-state-change", setSimulationState), []);
 
-        return () => {
-            unsubSimState();
-        };
-    }, []);
-
-    // Optional chaining throughout: these are reachable by keyboard shortcut,
-    // so they can fire before a model (and therefore a sigma instance) exists.
     const rotateCCW = () => {
         graphHelper.rotateCCW();
         graphHelper.sigmaInstance?.refresh();
@@ -55,40 +40,32 @@ const VisToolbar = ({ onToggleCharts, activePanel }) => {
         graphHelper.sigmaInstance?.refresh();
     };
 
-    const unHighlightCurrent = (obj) => {
-        if (obj.type === "edge") {
-            graphHelper.graph.setEdgeAttribute(obj.id, "highlighted", false);
+    const clearCurrentHighlight = () => {
+        const current = graphHelper.getCurrentHighlightedObject();
+        if (!current) return;
+
+        if (current.type === "edge") {
+            graphHelper.graph.setEdgeAttribute(current.id, "highlighted", false);
         } else {
-            graphHelper.graph.setNodeAttribute(obj.id, "highlighted", false);
+            graphHelper.graph.setNodeAttribute(current.id, "highlighted", false);
         }
     };
 
     const goToPrevious = () => {
         if (graphHelper.highlightedObjects.length === 0) return;
-
-        if (graphHelper.getCurrentHighlightedObject()) {
-            unHighlightCurrent(graphHelper.getCurrentHighlightedObject());
-        }
-
+        clearCurrentHighlight();
         graphHelper.focus(graphHelper.getPrevious());
     };
 
     const goToNext = () => {
         if (graphHelper.highlightedObjects.length === 0) return;
-
-        if (graphHelper.getCurrentHighlightedObject()) {
-            unHighlightCurrent(graphHelper.getCurrentHighlightedObject());
-        }
-
+        clearCurrentHighlight();
         graphHelper.focus(graphHelper.getNext());
     };
 
     const handleReset = () => {
         if (graphHelper.graph.order === 0) return;
-
-        if (graphHelper.getCurrentHighlightedObject()) {
-            unHighlightCurrent(graphHelper.getCurrentHighlightedObject());
-        }
+        clearCurrentHighlight();
 
         graphHelper.reset();
         graphHelper.sigmaInstance?.refresh();
@@ -100,8 +77,6 @@ const VisToolbar = ({ onToggleCharts, activePanel }) => {
             .catch((err) => reportError("Could not start the simulation", err));
     };
 
-    // Warn before running with an untouched (default) configuration, unless
-    // the user opted out of the warning.
     const handleStartSimulation = () => {
         const warningDismissed = localStorage.getItem(HIDE_START_SIM_WARNING_KEY) === "true";
         if (!socketClientHelper.simulationConfigCustomized && !warningDismissed) {
@@ -170,7 +145,7 @@ const VisToolbar = ({ onToggleCharts, activePanel }) => {
                         )}
                         <Tooltip title="Stop Simulation">
                             <Button
-                                disabled={!(simulationState === "running")}
+                                disabled={simulationState !== "running"}
                                 size="medium"
                                 aria-label="Stop simulation"
                                 onClick={handleStopSimulation}

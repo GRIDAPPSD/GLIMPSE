@@ -1,14 +1,15 @@
-from glmparser import dump as glm_dump
-from glmparser import load as glm_load
-from werkzeug.utils import secure_filename
+import io
 import os
 import zipfile
-import io
+
+from werkzeug.utils import secure_filename
+
+from glmparser import dump as glm_dump
+from glmparser import load as glm_load
 
 
 class GLMHelper:
-    def __init__(self):
-        self.max_file_size_mb = 5
+    MAX_FILE_SIZE_MB = 5
 
     def parse_glm(self, file_paths: list) -> dict:
         glm_dicts = {}
@@ -16,10 +17,10 @@ class GLMHelper:
             file_size_mb = os.path.getsize(glm_path) / (1024 * 1024)
             filename = os.path.basename(glm_path)
 
-            if file_size_mb > self.max_file_size_mb:
+            if file_size_mb > self.MAX_FILE_SIZE_MB:
                 raise ValueError(
                     f"File {filename} is too large ({file_size_mb:.2f} MB). "
-                    f"Maximum allowed size is {self.max_file_size_mb} MB."
+                    f"Maximum allowed size is {self.MAX_FILE_SIZE_MB} MB."
                 )
 
             result = glm_load(glm_path)
